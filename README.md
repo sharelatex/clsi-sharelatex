@@ -121,6 +121,7 @@ The CLSI is based on a JSON API.
 (Note that valid JSON should not contain any comments like the example below).
 
     POST /project/<project-id>/compile
+    Content-Type: application/json
 
 ```json5
 {
