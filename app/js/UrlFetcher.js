@@ -19,6 +19,7 @@ const logger = require('logger-sharelatex')
 const settings = require('settings-sharelatex')
 const URL = require('url')
 const async = require('async')
+const { promisify } = require('util')
 
 const oneMinute = 60 * 1000
 
@@ -76,7 +77,8 @@ module.exports = UrlFetcher = {
 
     return urlStream.on('response', function (res) {
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        const fileStream = fs.createWriteStream(filePath)
+        const atomicWrite = filePath + '~'
+        const fileStream = fs.createWriteStream(atomicWrite)
 
         // attach handlers before setting up pipes
         fileStream.on('error', function (error) {
@@ -84,7 +86,7 @@ module.exports = UrlFetcher = {
             { err: error, url, filePath },
             'error writing file into cache'
           )
-          return fs.unlink(filePath, function (err) {
+          return fs.unlink(atomicWrite, function (err) {
             if (err != null) {
               logger.err({ err, filePath }, 'error deleting file from cache')
             }
@@ -94,7 +96,13 @@ module.exports = UrlFetcher = {
 
         fileStream.on('finish', function () {
           logger.log({ url, filePath }, 'finished writing file into cache')
-          return callbackOnce()
+          fs.rename(atomicWrite, filePath, (error) => {
+            if (error) {
+              fs.unlink(atomicWrite, () => callbackOnce(error))
+            } else {
+              callbackOnce()
+            }
+          })
         })
 
         fileStream.on('pipe', () =>
@@ -125,4 +133,8 @@ module.exports = UrlFetcher = {
       }
     })
   }
+}
+
+module.exports.promises = {
+  pipeUrlToFileWithRetry: promisify(UrlFetcher.pipeUrlToFileWithRetry)
 }
